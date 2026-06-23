@@ -3,55 +3,87 @@ const axios = require('axios');
 const app = express();
 const PORT = 9000;
 
-// Base configuration parameters from the exam paper [cite: 142]
+// Set this to TRUE right now while practicing. Turn it to FALSE on exam day!
+const IS_MOCK_MODE = true; 
+
 const TEST_SERVER_BASE_URL = "http://20.244.56.144/test";
 
-// Middleware to parse incoming JSON payloads
 app.use(express.json());
 
-// Main Endpoint: Fetch Top Products across categories 
-// URL format: http://localhost:9000/categories/Laptop/products?n=10&minPrice=1&maxPrice=10000
+// Main Dynamic Endpoint matching guidelines: GET /categories/:categoryName/products
 app.get('/categories/:categoryName/products', async (req, res) => {
     try {
         const { categoryName } = req.params;
         
-        // Read URL query parameters with fallback defaults [cite: 163, 167, 168]
+        // 1. Destructure and sanitize all evaluation parameters
         const n = parseInt(req.query.n) || 10;
         const minPrice = parseInt(req.query.minPrice) || 0;
         const maxPrice = parseInt(req.query.maxPrice) || 1000000;
-        const sort = req.query.sort; // e.g., 'price', 'rating' [cite: 165]
-        const order = req.query.order || 'asc'; // 'asc' or 'desc' [cite: 166]
+        const sort = req.query.sort; // e.g., 'price', 'rating', 'discount'
+        const order = req.query.order || 'asc';
 
-        // Temporary mock source matching the structure of the 5 companies [cite: 171]
-        let combinedProducts = [
-            { productName: "Laptop AMZ 1", price: 5000, rating: 4.5, discount: 10, availability: "yes" },
-            { productName: "Laptop WAL 2", price: 2500, rating: 4.1, discount: 15, availability: "yes" },
-            { productName: "Laptop AMZ 1", price: 5000, rating: 4.5, discount: 10, availability: "yes" } // Duplicate
-        ];
+        let rawProducts = [];
 
-        // 1. Deduplicate items using a unique tracking Map matching your Day 1 training
+        if (IS_MOCK_MODE) {
+            console.log(`[MOCK ENGINE] Simulating responses for ${categoryName}...`);
+            // Simulating dirty, overlapping data from multiple e-commerce sources
+            rawProducts = [
+                { productName: "Premium Laptop Pro", price: 55000, rating: 4.7, discount: 12, availability: "yes" },
+                { productName: "Budget Chromebook", price: 15000, rating: 3.9, discount: 5, availability: "yes" },
+                { productName: "Premium Laptop Pro", price: 55000, rating: 4.7, discount: 12, availability: "yes" }, // Duplicate
+                { productName: "Gaming Beast Edition", price: 95000, rating: 4.9, discount: 20, availability: "out of stock" },
+                { productName: "Ultrabook Air", price: 42000, rating: 4.2, discount: 8, availability: "yes" }
+            ];
+        } else {
+            // LIVE ASSIGNMENT MODE: Fires off map loops to hit all 5 companies concurrently
+            const companies = ["A", "F", "HYN", "AMZ", "WAL"];
+            
+            const fetchPromises = companies.map(async (company) => {
+                try {
+                    const url = `${TEST_SERVER_BASE_URL}/companies/${company}/categories/${categoryName}/products/top-${n}/minPrice-${minPrice}/maxPrice-${maxPrice}`;
+                    const response = await axios.get(url, {
+                        headers: { 'Authorization': `Bearer CHANCE_TOKEN_FROM_AUTH_JS` }
+                    });
+                    return response.data || [];
+                } catch (err) {
+                    console.log(`Company ${company} skipped or timed out.`);
+                    return [];
+                }
+            });
+
+            const settledResponses = await Promise.all(fetchPromises);
+            rawProducts = settledResponses.flat(); // Merge all sub-arrays into one big list
+        }
+
+        // 2. DEDUPLICATION LAYER: Mastered in Day 1 using native Map keys
         const trackingMap = new Map();
-        combinedProducts.forEach(item => {
+        rawProducts.forEach(item => {
+            // Using productName as unique identifier key to catch identical items across sources
             trackingMap.set(item.productName, item);
         });
         let uniqueProducts = Array.from(trackingMap.values());
 
-        // 2. Sort mathematically based on selection queries [cite: 177]
+        // 3. MATHEMATICAL PROPERTY-BASED SORTING LAYER
         if (sort) {
             uniqueProducts.sort((a, b) => {
-                return order === 'desc' ? b[sort] - a[sort] : a[sort] - b[sort];
+                const valA = a[sort];
+                const valB = b[sort];
+                return order === 'desc' ? valB - valA : valA - valB;
             });
         }
 
-        // Return clean JSON response array [cite: 184]
-        res.json(uniqueProducts.slice(0, n));
+        // 4. PAGINATION / TOP-N SLICING
+        const finalPayload = uniqueProducts.slice(0, n);
+
+        // 5. OUTPUT CLEAN PAYLOAD TO CLIENT
+        res.json(finalPayload);
 
     } catch (error) {
-        console.error("Processing breakdown:", error.message);
+        console.error("Critical error in aggregation lifecycle:", error.message);
         res.status(500).json({ error: "Internal Server Processing Error" });
     }
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Server listening on http://localhost:${PORT}`);
+    console.log(`🚀 Dedicated Microservice Active on http://localhost:${PORT}`);
 });
