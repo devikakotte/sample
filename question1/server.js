@@ -1,14 +1,17 @@
 const express = require('express');
 const axios = require('axios');
+const cors = require('cors'); // 1. Import CORS
+
 const app = express();
 const PORT = 9000;
 
-// Set this to TRUE right now while practicing. Turn it to FALSE on exam day!
 const IS_MOCK_MODE = true; 
-
 const TEST_SERVER_BASE_URL = "http://20.244.56.144/test";
 
+app.use(cors()); // 2. Enable CORS for all incoming frontend connections
 app.use(express.json());
+
+// ... rest of your server.js code remains exactly the same ...
 
 // Main Dynamic Endpoint matching guidelines: GET /categories/:categoryName/products
 app.get('/categories/:categoryName/products', async (req, res) => {
